@@ -92,6 +92,14 @@ def getPlaylistPath(playlist):
     return f"{SETTINGS.downloadPath}/{retpath}"
 
 
+def getDatabasePath(track, playlist):
+    base = f"{SETTINGS.downloadPath}"
+    if playlist is not None and SETTINGS.usePlaylistFolder:
+        base = getPlaylistPath(playlist) + "/"
+
+    return f"{base}library.csv"
+
+
 def getTrackPath(track, stream, album=None, playlist=None):
     base = './'
     number = str(track.trackNumber).rjust(2, '0')

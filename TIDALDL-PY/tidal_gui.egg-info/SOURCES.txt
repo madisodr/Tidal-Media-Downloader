@@ -1,0 +1,8 @@
+setup-gui.py
+setup.py
+tidal_gui.egg-info/PKG-INFO
+tidal_gui.egg-info/SOURCES.txt
+tidal_gui.egg-info/dependency_links.txt
+tidal_gui.egg-info/entry_points.txt
+tidal_gui.egg-info/requires.txt
+tidal_gui.egg-info/top_level.txt

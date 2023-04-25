@@ -1,0 +1,2 @@
+[console_scripts]
+tidal-gui = tidal_gui:main

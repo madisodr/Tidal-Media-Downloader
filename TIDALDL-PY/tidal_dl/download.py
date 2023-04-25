@@ -6,24 +6,28 @@
 @Author  :   Yaronzz
 @Version :   1.0
 @Contact :   yaronhuang@foxmail.com
-@Desc    :   
+@Desc    :
 '''
 import aigpy
 import logging
+import time
 
+from tidal_dl.decryption import *
+from tidal_dl.library import *
 from tidal_dl.paths import *
 from tidal_dl.printf import *
-from tidal_dl.decryption import *
 from tidal_dl.tidal import *
 
 from concurrent.futures import ThreadPoolExecutor
 
-def __isSkip__(finalpath, url):
+def __isSkip__(track: Track, finalpath, url, album=None, playlist=None):
     if not SETTINGS.checkExist:
         return False
+
     curSize = aigpy.file.getSize(finalpath)
     if curSize <= 0:
         return False
+
     netSize = aigpy.net.getSize(url)
     return curSize >= netSize
 
@@ -114,14 +118,14 @@ def downloadVideo(video: Video, album: Album = None, playlist: Playlist = None):
     try:
         stream = TIDAL_API.getVideoStreamUrl(video.id, SETTINGS.videoQuality)
         path = getVideoPath(video, album, playlist)
-        
+
         Printf.video(video, stream)
         logging.info("[DL Video] name=" + aigpy.path.getFileName(path) + "\nurl=" + stream.m3u8Url)
 
         m3u8content = requests.get(stream.m3u8Url).content
         if m3u8content is None:
-            Printf.err(f"DL Video[{video.title}] getM3u8 failed.{str(e)}")
-            return False, f"GetM3u8 failed.{str(e)}"
+            Printf.err(f"DL Video[{video.title}] getM3u8 failed. {str(e)}")
+            return False, f"GetM3u8 failed. {str(e)}"
 
         urls = aigpy.m3u8.parseTsUrls(m3u8content)
         if len(urls) <= 0:
@@ -152,7 +156,12 @@ def downloadTrack(track: Track, album=None, playlist=None, userProgress=None, pa
             userProgress.updateStream(stream)
 
         # check exist
-        if __isSkip__(path, stream.url):
+        if checkDatabaseForTrack(track, playlist):
+            Printf.success(aigpy.path.getFileName(path) + " (skip:already exists in library!)")
+            time.sleep(2)
+            return True
+
+        if __isSkip__(path, stream.url, album, playlist):
             Printf.success(aigpy.path.getFileName(path) + " (skip:already exists!)")
             return True, ''
 
@@ -169,6 +178,7 @@ def downloadTrack(track: Track, album=None, playlist=None, userProgress=None, pa
 
         # encrypted -> decrypt and remove encrypted file
         __encrypted__(stream, path + '.part', path)
+        addTrackToDatabase(track, album, playlist)
 
         # contributors
         try:
@@ -199,7 +209,7 @@ def downloadTracks(tracks, album: Album = None, playlist : Playlist=None):
         if SETTINGS.saveCovers and not SETTINGS.usePlaylistFolder:
             downloadCover(album)
         return album
-    
+
     if not SETTINGS.multiThread:
         for index, item in enumerate(tracks):
             itemAlbum = album

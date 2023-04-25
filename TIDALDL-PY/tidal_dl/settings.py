@@ -18,6 +18,7 @@ from tidal_dl.enums import *
 
 class Settings(aigpy.model.ModelBase):
     checkExist = True
+    checkLibrary = True
     includeEP = True
     saveCovers = True
     language = 0
