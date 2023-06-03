@@ -44,6 +44,7 @@ class LangEnglish(object):
     SETTING_APIKEY = "APIKey support"
     SETTING_ADD_TYPE_FOLDER = "Add Type-Folder"
     SETTING_DOWNLOAD_DELAY = "Use Download Delay"
+    SETTING_DATABASE_IS_INITIALIZED = "Database Is Initialized"
 
     CHOICE = "CHOICE"
     FUNCTION = "FUNCTION"

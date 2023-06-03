@@ -40,7 +40,7 @@ class TidalAPI(object):
                 respond = requests.get(urlpre + path, headers=header, params=params)
                 if respond.url.find("playbackinfopostpaywall") != -1 and SETTINGS.downloadDelay is not False:
                     # random sleep between 0.5 and 5 seconds and print it
-                    sleep_time = random.randint(500, 5000) / 1000
+                    sleep_time = random.randint(500, 2000) / 1000
                     print(f"Sleeping for {sleep_time} seconds, to mimic human behaviour and prevent too many requests error")
                     time.sleep(sleep_time)
 

@@ -158,7 +158,7 @@ def downloadTrack(track: Track, album=None, playlist=None, userProgress=None, pa
         # check exist
         if checkDatabaseForTrack(track, playlist):
             Printf.success(aigpy.path.getFileName(path) + " (skip:already exists in library!)")
-            time.sleep(2)
+            time.sleep(0.5) # add this sleep step to rate limit how often we hit the tidal API
             return True
 
         if __isSkip__(path, stream.url, album, playlist):
@@ -178,7 +178,9 @@ def downloadTrack(track: Track, album=None, playlist=None, userProgress=None, pa
 
         # encrypted -> decrypt and remove encrypted file
         __encrypted__(stream, path + '.part', path)
-        addTrackToDatabase(track, album, playlist)
+
+        if playlist is not None:
+            addTrackToDatabase(track, playlist)
 
         # contributors
         try:

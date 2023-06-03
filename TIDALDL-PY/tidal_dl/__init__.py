@@ -14,6 +14,7 @@ import getopt
 from tidal_dl.events import *
 from tidal_dl.settings import *
 from tidal_dl.gui import startGui
+import tidal_dl.library
 
 
 def mainCommand():
@@ -67,11 +68,13 @@ def mainCommand():
         Printf.info(LANG.select.SETTING_DOWNLOAD_PATH + ':' + SETTINGS.downloadPath)
         start(link)
 
+
+
 def main():
     SETTINGS.read(getProfilePath())
     TOKEN.read(getTokenPath())
     TIDAL_API.apiKey = apiKey.getItem(SETTINGS.apiKeyIndex)
-    
+
     if len(sys.argv) > 1:
         mainCommand()
         return
@@ -86,6 +89,13 @@ def main():
         loginByWeb()
     
     Printf.checkVersion()
+
+    # setup the database if it hasn't been yet
+    """
+    if tidal_dl.library.isDatabaseInitialized() is False:
+        tidal_dl.library.setupDatabase()
+        SETTINGS.isDatabaseInitialized = True
+    """
     
     while True:
         Printf.choices()

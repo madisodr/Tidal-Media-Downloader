@@ -30,6 +30,7 @@ class Settings(aigpy.model.ModelBase):
     downloadVideos = True
     multiThread = False
     downloadDelay = True
+    isDatabaseInitialized = False
 
     downloadPath = "./download/"
     audioQuality = AudioQuality.Normal
