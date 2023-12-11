@@ -10,78 +10,93 @@
 '''
 import csv
 import os
-import mysql.connector
-import mysql.connector.cursor
+import sqlite3
 
 from tidal_dl.paths import *
 from tidal_dl.printf import *
 from tidal_dl.tidal import *
 
+_connection: sqlite3.Connection = None
+database_file = "library.db"
 
-_connection:mysql.connector.MySQLConnection = None
-
-def getConnection() -> mysql.connector.MySQLConnection:
+def getConnection() -> sqlite3.Connection:
     global _connection
     if not _connection:
-        # TODO make these params configurable via settings
-        _connection =  mysql.connector.connect(host="localhost", user="root", password="passwd") 
-
-        Printf.info("sucessfully connected to mysql database")
+        _connection = sqlite3.connect(database_file)
+        print("Successfully connected to SQLite database")
 
     return _connection
 
-def getCursor() -> mysql.connector.cursor.MySQLCursor:
+def getCursor() -> sqlite3.Cursor:
     cursor = getConnection().cursor()
-    cursor.execute("USE tidal_dl")    
+    # Assuming you want to use a specific SQLite database schema or file
+    cursor.execute(f"ATTACH DATABASE '{database_file}' AS tidal_dl")
     return cursor
 
 def isDatabaseInitialized() -> bool:
     try:
-        _cursor = getCursor()
+        cursor = getCursor()
 
-        _cursor.execute("SHOW DATABASES LIKE 'tidal_dl'")
-        database_exists = _cursor.fetchone()
+        # Check if the tidal_dl database exists
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='songs'")
+        songs_table_exists = cursor.fetchone()
 
-        if database_exists:
-            _cursor.execute("USE tidal_dl")
-            # Check if the songs table exists
-            _cursor.execute("SHOW TABLES LIKE 'songs'")
-            songs_table_exists = _cursor.fetchone()
+        # Check if the songs table exists
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='playlists'")
+        playlists_table_exists = cursor.fetchone()
 
-            # Check if the playlists table exists
-            _cursor.execute("SHOW TABLES LIKE 'playlists'")
-            playlists_table_exists = _cursor.fetchone()
+        cursor.close()
 
-            _cursor.close()
-            if songs_table_exists and playlists_table_exists:
-                Printf.info("The tidal_dl database exists, and the songs and playlists tables are present.")
-                return True
-            else:
-                Printf.info("The tidal_dl database exists, but either the songs table or the playlists table is missing.")
-                return False
-
-        else:
-            Printf.info("The tidal_dl database does not exist.")
+        if songs_table_exists and playlists_table_exists:
+            print("The tidal_dl database exists, and the songs and playlists tables are present.")
+            return True
+        elif songs_table_exists or playlists_table_exists:
+            print("The tidal_dl database exists, but either the songs table or the playlists table is missing.")
             return False
-    except mysql.connector.Error as error:
-        Printf.err(f"Error while executing SQL query: {str(error)}")
+        else:
+            print("The tidal_dl database does not exist.")
+            return False
+    except sqlite3.Error as error:
+        print(f"Error while executing SQL query: {str(error)}")
         return False
-    finally: 
-        _cursor.close()
-    
 
 def setupDatabase():
+    cursor = getCursor()
+    create_table_sql = """
+    CREATE TABLE IF NOT EXISTS playlists (
+        uuid VARCHAR(255) NOT NULL,
+        title VARCHAR(255) NOT NULL,
+        numberOfTracks INT UNSIGNED DEFAULT 0,
+        duration INT UNSIGNED DEFAULT 0,
+        PRIMARY KEY (uuid)
+    )
+    """
     try:
-        _cursor = getCursor()
-        with open ('sql/setup.sql', 'r') as file:
-            sql_statements = file.read()
-        
-        _cursor.execute(sql_statements)
-    except mysql.connector.Error as error:
-        Printf.err(f"Error while executing SQL query: {str(error)}")
+        cursor.execute(create_table_sql)
+    except sqlite3.Error as error:
+        print(f"Error while executing SQL query: {str(error)}")
         return False
-    finally: 
-        _cursor.close()
+
+    create_table_sql = """
+    CREATE TABLE IF NOT EXISTS songs (
+        uuid INTEGER PRIMARY KEY AUTOINCREMENT,
+        id INT UNSIGNED NOT NULL,
+        title VARCHAR(255) NOT NULL,
+        artist VARCHAR(255) NOT NULL,
+        album VARCHAR(255),
+        playlist VARCHAR(255) NOT NULL,
+        duration INT UNSIGNED DEFAULT 0,
+        trackNumberOnPlaylist INT UNSIGNED DEFAULT 0,
+        FOREIGN KEY (playlist) REFERENCES playlists (uuid)
+    )
+    """
+    try:
+        cursor.execute(create_table_sql)
+    except sqlite3.Error as error:
+        print(f"Error while executing SQL query: {str(error)}")
+        return False
+    
+    _connection.commit()
 
 '''
 Check to see if a playlists exists in the database already
@@ -91,7 +106,7 @@ def checkDatabaseForPlaylist(playlist: Playlist=None) -> bool:
     # skip songs not in a playlist
     if playlist is None:
         return False
-    
+
     try:
         _cursor = getCursor()
 
@@ -107,12 +122,12 @@ def checkDatabaseForPlaylist(playlist: Playlist=None) -> bool:
             return True
         else:
             return False
-    except mysql.connector.Error as error:
+    except sqlite3.Error as error:
         Printf.err(f"Error while executing SQL query: {str(error)}")
         return False
-    finally: 
+    finally:
         _cursor.close()
-    
+
 '''
 Check to see if a track exists in the database
 '''
@@ -121,7 +136,7 @@ def checkDatabaseForTrack(track: Track, playlist: Playlist=None) -> bool:
     # skip songs not in a playlist
     if playlist is None:
         return False
-    
+
     try:
         _cursor = getCursor()
 
@@ -139,12 +154,12 @@ def checkDatabaseForTrack(track: Track, playlist: Playlist=None) -> bool:
             return True
         else:
             return False
-    except mysql.connector.Error as error:
+    except sqlite3.Error as error:
         Printf.err(f"Error while executing SQL query: {str(error)}")
         return False
-    finally: 
+    finally:
         _cursor.close()
-    
+
 
 def addTrackToDatabase(track: Track, playlist: Playlist=None):
     Printf.info("add track to db")
@@ -154,7 +169,7 @@ def addTrackToDatabase(track: Track, playlist: Playlist=None):
 
     try:
         _cursor = getCursor()
-        
+
         # Insert the playlist if it doesn't exist
         insert_playlist_query = "INSERT INTO tidal_dl.playlists (uuid, title, numberOfTracks, duration) VALUES (%s, %s, %s, %s) ON DUPLICATE KEY UPDATE title=VALUES(title), numberOfTracks=VALUES(numberOfTracks), duration=VALUES(duration)"
         playlist_values = (playlist.uuid, playlist.title, playlist.numberOfTracks, playlist.duration)
@@ -164,13 +179,13 @@ def addTrackToDatabase(track: Track, playlist: Playlist=None):
         insert_track_query = "INSERT INTO tidal_dl.songs (id, title, artist, album, playlist, duration, trackNumberOnPlaylist) VALUES (%s, %s, %s, %s, %s, %s, %s)"
         track_values = (track.id, track.title, track.artist.name, track.album.title, playlist.uuid, track.duration, track.trackNumberOnPlaylist)
         _cursor.execute(insert_track_query, track_values)
-        
+
         # Commit the changes to the database
         _connection.commit()
 
         return True
-    except mysql.connector.Error as error:
+    except sqlite3.Error as error:
         Printf.err(f"Error while executing SQL query: {str(error)}")
         return False
-    finally: 
+    finally:
         _cursor.close()
