@@ -27,15 +27,9 @@ def getConnection() -> sqlite3.Connection:
 
     return _connection
 
-def getCursor() -> sqlite3.Cursor:
-    cursor = getConnection().cursor()
-    # Assuming you want to use a specific SQLite database schema or file
-    cursor.execute(f"ATTACH DATABASE '{database_file}' AS tidal_dl")
-    return cursor
-
 def isDatabaseInitialized() -> bool:
     try:
-        cursor = getCursor()
+        cursor = getConnection().cursor()
 
         # Check if the tidal_dl database exists
         cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='songs'")
@@ -44,8 +38,6 @@ def isDatabaseInitialized() -> bool:
         # Check if the songs table exists
         cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='playlists'")
         playlists_table_exists = cursor.fetchone()
-
-        cursor.close()
 
         if songs_table_exists and playlists_table_exists:
             print("The tidal_dl database exists, and the songs and playlists tables are present.")
@@ -59,9 +51,11 @@ def isDatabaseInitialized() -> bool:
     except sqlite3.Error as error:
         print(f"Error while executing SQL query: {str(error)}")
         return False
+    finally:
+        cursor.close()
 
 def setupDatabase():
-    cursor = getCursor()
+    cursor = getConnection().cursor()
     create_table_sql = """
     CREATE TABLE IF NOT EXISTS playlists (
         uuid VARCHAR(255) NOT NULL,
@@ -95,7 +89,9 @@ def setupDatabase():
     except sqlite3.Error as error:
         print(f"Error while executing SQL query: {str(error)}")
         return False
-    
+    finally:
+        cursor.close()
+
     _connection.commit()
 
 '''
@@ -108,15 +104,13 @@ def checkDatabaseForPlaylist(playlist: Playlist=None) -> bool:
         return False
 
     try:
-        _cursor = getCursor()
+        cursor = getConnection().cursor()
 
-        query = "SELECT COUNT(*) FROM tidal_dl.playlists WHERE uuid = %s"
+        query = "SELECT COUNT(*) FROM tidal_dl.playlists WHERE uuid = ?"
         values = (playlist.uuid)
 
-        _cursor.execute(query, values)
-        result = _cursor.fetchone()
-
-        _cursor.close()
+        cursor.execute(query, values)
+        result = cursor.fetchone()
 
         if result[0] > 0:
             return True
@@ -126,7 +120,7 @@ def checkDatabaseForPlaylist(playlist: Playlist=None) -> bool:
         Printf.err(f"Error while executing SQL query: {str(error)}")
         return False
     finally:
-        _cursor.close()
+        cursor.close()
 
 '''
 Check to see if a track exists in the database
@@ -138,27 +132,25 @@ def checkDatabaseForTrack(track: Track, playlist: Playlist=None) -> bool:
         return False
 
     try:
-        _cursor = getCursor()
+        cursor = getConnection().cursor()
 
         # Prepare the SQL query
-        query = "SELECT COUNT(*) FROM tidal_dl.songs WHERE id = %s AND playlist = %s"
+        query = "SELECT COUNT(*) FROM tidal_dl.songs WHERE id = ? AND playlist = ?"
         values = (track.id, playlist.uuid)
 
         # Execute the query
-        _cursor.execute(query, values)
-        result = _cursor.fetchone()
-
-        _cursor.close()
+        cursor.execute(query, values)
+        result = cursor.fetchone()
 
         if result[0] > 0:
             return True
         else:
             return False
     except sqlite3.Error as error:
-        Printf.err(f"Error while executing SQL query: {str(error)}")
+        Printf.err(f"Error while executing SQL query: {str(error)} {query}")
         return False
     finally:
-        _cursor.close()
+        cursor.close()
 
 
 def addTrackToDatabase(track: Track, playlist: Playlist=None):
@@ -168,17 +160,29 @@ def addTrackToDatabase(track: Track, playlist: Playlist=None):
         return True
 
     try:
-        _cursor = getCursor()
+        cursor = getConnection().cursor()
 
         # Insert the playlist if it doesn't exist
-        insert_playlist_query = "INSERT INTO tidal_dl.playlists (uuid, title, numberOfTracks, duration) VALUES (%s, %s, %s, %s) ON DUPLICATE KEY UPDATE title=VALUES(title), numberOfTracks=VALUES(numberOfTracks), duration=VALUES(duration)"
+        insert_playlist_query = """
+        INSERT INTO tidal_dl.playlists 
+            (uuid, title, numberOfTracks, duration) 
+        VALUES 
+            (?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE 
+            title=VALUES(title), numberOfTracks=VALUES(numberOfTracks), duration=VALUES(duration)
+        """
         playlist_values = (playlist.uuid, playlist.title, playlist.numberOfTracks, playlist.duration)
-        _cursor.execute(insert_playlist_query, playlist_values)
+        cursor.execute(insert_playlist_query, playlist_values)
 
         # Insert the track into the songs table
-        insert_track_query = "INSERT INTO tidal_dl.songs (id, title, artist, album, playlist, duration, trackNumberOnPlaylist) VALUES (%s, %s, %s, %s, %s, %s, %s)"
+        insert_track_query = """
+        INSERT INTO 
+            tidal_dl.songs (id, title, artist, album, playlist, duration, trackNumberOnPlaylist) 
+        VALUES 
+            (?, ?, ?, ?, ?, ?, ?)
+        """
         track_values = (track.id, track.title, track.artist.name, track.album.title, playlist.uuid, track.duration, track.trackNumberOnPlaylist)
-        _cursor.execute(insert_track_query, track_values)
+        cursor.execute(insert_track_query, track_values)
 
         # Commit the changes to the database
         _connection.commit()
@@ -188,4 +192,4 @@ def addTrackToDatabase(track: Track, playlist: Playlist=None):
         Printf.err(f"Error while executing SQL query: {str(error)}")
         return False
     finally:
-        _cursor.close()
+        cursor.close()

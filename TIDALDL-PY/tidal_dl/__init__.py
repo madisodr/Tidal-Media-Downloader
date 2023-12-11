@@ -91,11 +91,10 @@ def main():
     Printf.checkVersion()
 
     # setup the database if it hasn't been yet
-    """
     if tidal_dl.library.isDatabaseInitialized() is False:
         tidal_dl.library.setupDatabase()
         SETTINGS.isDatabaseInitialized = True
-    """
+    
     
     while True:
         Printf.choices()
